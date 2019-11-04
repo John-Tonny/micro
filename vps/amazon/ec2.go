@@ -6,7 +6,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -31,7 +30,7 @@ func NewEc2Client(region string, profile string) (*EC2Client, error) {
 	return c, err
 }
 
-func (c *EC2Client) CreateInstance(imageId string, instanceType string) (string, error) {
+func (c *EC2Client) CreateInstances(imageId string, instanceType string, keyName string, securityGroupId string) (string, error) {
 	// Specify the details of the instance that you want to create.
 	if len(imageId) == 0 {
 		imageId = "ami-0d5d9d301c853a04a"
@@ -40,14 +39,21 @@ func (c *EC2Client) CreateInstance(imageId string, instanceType string) (string,
 	if len(instanceType) == 0 {
 		instanceType = "t2.micro"
 	}
+
+	if len(keyName) == 0 {
+		keyName = "myaws"
+	}
+
 	log.Info("Create instance for ", imageId, " of ", instanceType)
 
 	result, err := c.RunInstances(&ec2.RunInstancesInput{
 		// An Amazon Linux AMI ID for t2.micro instances in the us-west-2 region
-		ImageId:      aws.String(imageId),
-		InstanceType: aws.String(instanceType),
-		MinCount:     aws.Int64(1),
-		MaxCount:     aws.Int64(1),
+		ImageId:          aws.String(imageId),
+		InstanceType:     aws.String(instanceType),
+		MinCount:         aws.Int64(1),
+		MaxCount:         aws.Int64(1),
+		KeyName:          aws.String(keyName),
+		SecurityGroupIds: []*string{aws.String(securityGroupId)},
 	})
 
 	if err != nil {
@@ -159,6 +165,15 @@ func (c *EC2Client) RebootInstance(instanceId string) (*ec2.RebootInstancesOutpu
 	return nil, err
 }
 
+/*
+func (c *EC2Client) UpdateSecurityGroupOfInstance(networkInterfaceId string, groupId string, vpcId string) (*ec2.ModifyNetworkInterfaceAttributeOutput, error) {
+	return c.ModifyNetworkInterfaceAttribute(&ec2.ModifyNetworkInterfaceAttributeInput{
+		NetworkInterfaceId: aws.String(networkInterfaceId),
+		SecurityGroupIds:   aws.String(groupId),
+	})
+}
+*/
+
 func (c *EC2Client) GetDescribeInstance(instanceIds []string) (*ec2.DescribeInstancesOutput, error) {
 	if len(instanceIds) == 0 {
 		return c.DescribeInstances(nil)
@@ -234,6 +249,20 @@ func (c *EC2Client) SetSecurityGroups(name string, ipPermission []*ec2.IpPermiss
 	return name, nil
 }
 
+func (c *EC2Client) UpdateSecurityGroups(groupId string, ipPermission []*ec2.IpPermission) (string, error) {
+	log.Info("Update security group ", groupId)
+	_, err := c.UpdateSecurityGroupRuleDescriptionsIngress(&ec2.UpdateSecurityGroupRuleDescriptionsIngressInput{
+		GroupId:       aws.String(groupId),
+		IpPermissions: ipPermission,
+	})
+	if err != nil {
+		log.Error("Unable to update security group ", groupId, " ingress, ", err)
+		return "", err
+	}
+	log.Info("Success update security group ", groupId)
+	return groupId, nil
+}
+
 func (c *EC2Client) DeleteSecurityGroups(groupId string) (string, error) {
 	// Delete the security group.
 	log.Info("Delete security group ", groupId)
@@ -258,7 +287,7 @@ func (c *EC2Client) DeleteSecurityGroups(groupId string) (string, error) {
 }
 
 func (c *EC2Client) GetDescribeSecurityGroups(groupIds []string) (*ec2.DescribeSecurityGroupsOutput, error) {
-	if len(groupIds) == 0 {
+	if len(groupNames) == 0 {
 		return c.DescribeSecurityGroups(nil)
 	}
 	return c.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
@@ -327,9 +356,8 @@ func (c *EC2Client) AllocateAddresss(instanceId string) (string, string, error) 
 		log.Error("Unable to associate IP address with ", instanceId, ", ", err)
 		return "", *allocRes.AllocationId, err
 	}
-	log.Info("Successfully allocated ", *allocRes.PublicIp, "with instance ", instanceId, ". allocation id: ", *allocRes.AllocationId, " association id: ", *assocRes.AssociationId)
+	log.Info("Successfully allocated ", *allocRes.PublicIp, " with instance ", instanceId, ". allocation id: ", *allocRes.AllocationId, " association id: ", *assocRes.AssociationId)
 	return *allocRes.PublicIp, *allocRes.AllocationId, nil
-
 }
 
 func (c *EC2Client) AssociateAddresss(instanceId string, allocationId string) (string, error) {
@@ -405,7 +433,6 @@ func (c *EC2Client) DetachVolumes(instanceId string, volumeId string, deviceName
 		InstanceId: aws.String(instanceId),
 		VolumeId:   aws.String(volumeId),
 	})
-
 }
 
 func (c *EC2Client) ModifyVolumes(volumeId string, size int64) (*ec2.ModifyVolumeOutput, error) {
@@ -427,6 +454,61 @@ func (c *EC2Client) GetDescribeVolumes(volumeIds []string) (*ec2.DescribeVolumes
 	}
 	return c.DescribeVolumes(&ec2.DescribeVolumesInput{
 		VolumeIds: aws.StringSlice(volumeIds),
+	})
+}
+
+func (c *EC2Client) CreateNetworkInterfaces(desc string, groupId string, privateAddress string, subnetId string) (*ec2.CreateNetworkInterfaceOutput, error) {
+	return c.CreateNetworkInterface(&ec2.CreateNetworkInterfaceInput{
+		Description: aws.String(desc),
+		Groups: []*string{
+			aws.String(groupId),
+		},
+		PrivateIpAddress: aws.String(privateAddress),
+		SubnetId:         aws.String(subnetId),
+	})
+}
+
+func (c *EC2Client) DeleteNetworkInterfaces(networkInterfaceId string) (*ec2.DeleteNetworkInterfaceOutput, error) {
+	return c.DeleteNetworkInterface(&ec2.DeleteNetworkInterfaceInput{
+		NetworkInterfaceId: aws.String(networkInterfaceId),
+	})
+}
+
+func (c *EC2Client) GetDescribeNetworkInterfaces(networkInterfaceId string) (*ec2.DescribeNetworkInterfacesOutput, error) {
+	if len(networkInterfaceId) == 0 {
+		return c.DescribeNetworkInterfaces(nil)
+	}
+	return c.DescribeNetworkInterfaces(&ec2.DescribeNetworkInterfacesInput{
+		NetworkInterfaceIds: []*string{
+			aws.String(networkInterfaceId),
+		},
+	})
+}
+
+func (c *EC2Client) CreateSubnets(cidrBlock string, vpcId string) (*ec2.CreateSubnetOutput, error) {
+	return c.CreateSubnet(&ec2.CreateSubnetInput{
+		CidrBlock: aws.String(cidrBlock),
+		VpcId:     aws.String(vpcId),
+	})
+}
+
+func (c *EC2Client) DeleteSubnets(subnetId string) (*ec2.DeleteSubnetOutput, error) {
+	return c.DeleteSubnet(&ec2.DeleteSubnetInput{
+		SubnetId: aws.String(subnetId),
+	})
+}
+
+func (c *EC2Client) GetDescribeSubnets(subnetIds []string) (*ec2.DescribeSubnetsOutput, error) {
+	if len(subnetIds) == 0 {
+		return c.DescribeSubnets(nil)
+	}
+	return c.DescribeSubnets(&ec2.DescribeSubnetsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: aws.StringSlice(subnetIds),
+			},
+		},
 	})
 }
 
