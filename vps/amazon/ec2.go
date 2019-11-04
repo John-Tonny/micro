@@ -4,9 +4,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/ec2"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -287,12 +287,21 @@ func (c *EC2Client) DeleteSecurityGroups(groupId string) (string, error) {
 	return groupId, nil
 }
 
-func (c *EC2Client) GetDescribeSecurityGroups(groupIds []string) (*ec2.DescribeSecurityGroupsOutput, error) {
-	if len(groupNames) == 0 {
+func (c *EC2Client) GetDescribeSecurityGroupsFromId(groupIds []string) (*ec2.DescribeSecurityGroupsOutput, error) {
+	if len(groupIds) == 0 {
 		return c.DescribeSecurityGroups(nil)
 	}
 	return c.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
 		GroupIds: aws.StringSlice(groupIds),
+	})
+}
+
+func (c *EC2Client) GetDescribeSecurityGroupsFromName(groupNames []string) (*ec2.DescribeSecurityGroupsOutput, error) {
+	if len(groupNames) == 0 {
+		return c.DescribeSecurityGroups(nil)
+	}
+	return c.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
+		GroupNames: aws.StringSlice(groupNames),
 	})
 }
 
