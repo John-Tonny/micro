@@ -18,6 +18,9 @@ type EC2Client struct {
 func NewEc2Client(region string, profile string) (*EC2Client, error) {
 	// Initialize a session in us-west-2 that the SDK will use to load
 	// credentials from the shared credentials file ~/.aws/credentials.
+	if len(region) == 0 {
+		region = "us-east-2"
+	}
 	sess, err := session.NewSession(&aws.Config{
 		Region:      aws.String(region),
 		Credentials: credentials.NewSharedCredentials("", profile)},
@@ -34,7 +37,7 @@ func NewEc2Client(region string, profile string) (*EC2Client, error) {
 func (c *EC2Client) CreateInstances(imageId string, instanceType string, keyName string, securityGroupId string) (string, error) {
 	// Specify the details of the instance that you want to create.
 	if len(imageId) == 0 {
-		imageId = "ami-0d5d9d301c853a04a"
+		imageId = "ami-0b0426f6bc13cbfe4"
 	}
 
 	if len(instanceType) == 0 {
@@ -164,6 +167,18 @@ func (c *EC2Client) RebootInstance(instanceId string) (*ec2.RebootInstancesOutpu
 	}
 	log.Info("Unable to reboot instance ", instanceId)
 	return nil, err
+}
+
+func (c *EC2Client) WaitUntilInstanceRun(instanceIds []string) error {
+	return c.WaitUntilInstanceRunning(&ec2.DescribeInstancesInput{
+		InstanceIds: aws.StringSlice(instanceIds),
+	})
+}
+
+func (c *EC2Client) WaitUntilInstanceTerminate(instanceIds []string) error {
+	return c.WaitUntilInstanceTerminated(&ec2.DescribeInstancesInput{
+		InstanceIds: aws.StringSlice(instanceIds),
+	})
 }
 
 /*
@@ -414,11 +429,15 @@ func (c *EC2Client) GetDescribeAddresss() (*ec2.DescribeAddressesOutput, error) 
 	})
 }
 
-func (c *EC2Client) CreateVolumes(zone string, size int64) (string, error) {
+func (c *EC2Client) CreateVolumes(zone, snapshotId string, size int64) (string, error) {
 	log.Info("create volume ", size, "GB in ", zone)
+	if len(zone) == 0 {
+		zone = "us-east-2"
+	}
 	result, err := c.CreateVolume(&ec2.CreateVolumeInput{
 		AvailabilityZone: aws.String(zone),
 		Size:             aws.Int64(size),
+		SnapshotId:       aws.String(snapshotId),
 	})
 	if err != nil {
 		log.Error("Unable to release IP address for allocation ", " ", err)
@@ -463,6 +482,18 @@ func (c *EC2Client) GetDescribeVolumes(volumeIds []string) (*ec2.DescribeVolumes
 		return c.DescribeVolumes(nil)
 	}
 	return c.DescribeVolumes(&ec2.DescribeVolumesInput{
+		VolumeIds: aws.StringSlice(volumeIds),
+	})
+}
+
+func (c *EC2Client) WaitUntilVolumeAvailables(volumeIds []string) error {
+	return c.WaitUntilVolumeAvailable(&ec2.DescribeVolumesInput{
+		VolumeIds: aws.StringSlice(volumeIds),
+	})
+}
+
+func (c *EC2Client) WaitUntilVolumeDelete(volumeIds []string) error {
+	return c.WaitUntilVolumeDeleted(&ec2.DescribeVolumesInput{
 		VolumeIds: aws.StringSlice(volumeIds),
 	})
 }
@@ -519,6 +550,31 @@ func (c *EC2Client) GetDescribeSubnets(subnetIds []string) (*ec2.DescribeSubnets
 				Values: aws.StringSlice(subnetIds),
 			},
 		},
+	})
+}
+
+func (c *EC2Client) SnapshotCreate(volumeId string) (*ec2.Snapshot, error) {
+	return c.CreateSnapshot(&ec2.CreateSnapshotInput{
+		VolumeId: aws.String(volumeId),
+	})
+}
+
+func (c *EC2Client) SnapshotCopy(region, volumeId string) (*ec2.CopySnapshotOutput, error) {
+	return c.CopySnapshot(&ec2.CopySnapshotInput{
+		SourceRegion:     aws.String(region),
+		SourceSnapshotId: aws.String(volumeId),
+	})
+}
+
+func (c *EC2Client) SnapshotDelete(snapshotId string) (*ec2.DeleteSnapshotOutput, error) {
+	return c.DeleteSnapshot(&ec2.DeleteSnapshotInput{
+		SnapshotId: aws.String(snapshotId),
+	})
+}
+
+func (c *EC2Client) WaitUntilSnapshotComplete(snapshotIds []string) error {
+	return c.WaitUntilSnapshotCompleted(&ec2.DescribeSnapshotsInput{
+		SnapshotIds: aws.StringSlice(snapshotIds),
 	})
 }
 
