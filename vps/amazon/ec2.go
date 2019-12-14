@@ -181,6 +181,18 @@ func (c *EC2Client) WaitUntilInstanceTerminate(instanceIds []string) error {
 	})
 }
 
+func (c *EC2Client) WaitUntilInstanceStatusOkA(instanceIds []string) error {
+	return c.WaitUntilInstanceStatusOk(&ec2.DescribeInstanceStatusInput{
+		InstanceIds: aws.StringSlice(instanceIds),
+	})
+}
+
+func (c *EC2Client) DescribeInstanceStatusA(instanceIds []string) error {
+	return c.DescribeInstanceStatus(&DescribeInstanceStatusInput{
+		InstanceIds: aws.StringSlice(instanceIds),
+		},
+	})
+
 /*
 func (c *EC2Client) UpdateSecurityGroupOfInstance(networkInterfaceId string, groupId string, vpcId string) (*ec2.ModifyNetworkInterfaceAttributeOutput, error) {
 	return c.ModifyNetworkInterfaceAttribute(&ec2.ModifyNetworkInterfaceAttributeInput{
