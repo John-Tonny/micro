@@ -187,11 +187,11 @@ func (c *EC2Client) WaitUntilInstanceStatusOkA(instanceIds []string) error {
 	})
 }
 
-func (c *EC2Client) DescribeInstanceStatusA(instanceIds []string) error {
-	return c.DescribeInstanceStatus(&DescribeInstanceStatusInput{
+func (c *EC2Client) DescribeInstanceStatusA(instanceIds []string) (*ec2.DescribeInstanceStatusOutput, error) {
+	return c.DescribeInstanceStatus(&ec2.DescribeInstanceStatusInput{
 		InstanceIds: aws.StringSlice(instanceIds),
-		},
 	})
+}
 
 /*
 func (c *EC2Client) UpdateSecurityGroupOfInstance(networkInterfaceId string, groupId string, vpcId string) (*ec2.ModifyNetworkInterfaceAttributeOutput, error) {
